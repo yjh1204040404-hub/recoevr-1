@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAXIS - Recovery Queue</title>
+    <style>
+        /* 디스코드 기본 배경색 */
+        body {
+            background-color: #313338;
+            color: #dbdee1;
+            font-family: 'gg sans', 'Noto Sans KR', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* 임베드 컨테이너 */
+        .embed-wrapper {
+            background-color: #2b2d31;
+            border-radius: 4px;
+            border-left: 4px solid #5865F2; /* 임베드 좌측 포인트 컬러 (Blurple) */
+            padding: 16px;
+            width: 450px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 임베드 타이틀 (Recovery) */
+        .embed-title {
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        /* 임베드 설명 */
+        .embed-description {
+            font-size: 14px;
+            line-height: 1.375;
+            margin-bottom: 16px;
+            color: #dbdee1;
+        }
+
+        /* 필드 영역 (대기열 정보 등) */
+        .embed-field {
+            margin-bottom: 16px;
+        }
+        .embed-field-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+        .embed-field-value {
+            font-size: 14px;
+        }
+
+        /* 간지나는 게이지 (프로그레스 바) */
+        .progress-container {
+            background-color: #1e1f22;
+            border-radius: 8px;
+            height: 12px;
+            width: 100%;
+            overflow: hidden;
+            margin-top: 8px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #5865F2, #00b0f4);
+            box-shadow: 0 0 10px #5865F2;
+            transition: width 0.5s ease-in-out;
+            border-radius: 8px;
+        }
+
+        /* 디스코드 스타일 버튼 그룹 */
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        .discord-btn {
+            border: none;
+            border-radius: 3px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #fff;
+            transition: background-color 0.2s;
+        }
+        .btn-primary { background-color: #5865F2; } /* Blurple */
+        .btn-primary:hover { background-color: #4752c4; }
+        .btn-danger { background-color: #DA373C; } /* Red */
+        .btn-danger:hover { background-color: #a12828; }
+        .btn-secondary { background-color: #4E5058; } /* Grey */
+        .btn-secondary:hover { background-color: #6d6f78; }
+
+        /* 상태 텍스트 하이라이트 */
+        .highlight { color: #00b0f4; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="embed-wrapper">
+        <div class="embed-title">🔄 System Recovery & Sync</div>
+        
+        <div class="embed-description">
+            데이터베이스 복구 및 라이선스 시스템 동기화가 진행 중입니다. 대기열에 맞춰 순차적으로 처리됩니다.
+        </div>
+
+        <div class="embed-field">
+            <div class="embed-field-title">현재 대기열 (Queue)</div>
+            <div class="embed-field-value">당신의 순위: <span id="queue-position" class="highlight">조회 중...</span></div>
+        </div>
+
+        <div class="embed-field">
+            <div class="embed-field-title">Recovery Progress (동기화 진행률)</div>
+            <div class="embed-field-value" id="progress-text">0%</div>
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="discord-btn btn-primary" onclick="joinQueue()">대기열 참가</button>
+            <button class="discord-btn btn-secondary" onclick="forceSync()">수동 동기화</button>
+            <button class="discord-btn btn-danger" onclick="cancelQueue()">대기열 취소</button>
+        </div>
+    </div>
+
+    <script>
+        // 백엔드(Flask)와 동기화하기 위한 갱신 함수
+        async function fetchQueueStatus() {
+            try {
+                // 주의: 플라스크 백엔드에 /api/queue 라우트를 만들어야 정상 작동합니다.
+                // const response = await fetch('/api/queue');
+                // const data = await response.json();
+                
+                // 프론트엔드 테스트용 가상 데이터 (백엔드 연결 시 지우고 위 코드 사용)
+                const data = {
+                    position: Math.floor(Math.random() * 10) + 1, // 1~10등 랜덤
+                    progress: Math.floor(Math.random() * 100) // 0~100% 랜덤
+                };
+
+                // 대기열 및 게이지 업데이트
+                document.getElementById('queue-position').innerText = `${data.position} 번째`;
+                document.getElementById('progress-bar').style.width = `${data.progress}%`;
+                document.getElementById('progress-text').innerText = `${data.progress}% 진행 중`;
+
+                // 100% 완료 시 효과
+                if (data.progress >= 100) {
+                    document.getElementById('progress-text').innerText = "Recovery 완료!";
+                    document.getElementById('progress-text').style.color = "#23a559"; // 초록색
+                }
+            } catch (error) {
+                console.error("동기화 오류:", error);
+                document.getElementById('queue-position').innerText = "서버 연결 실패";
+            }
+        }
+
+        // 버튼 액션 함수들
+        function joinQueue() {
+            alert("대기열에 참가했습니다.");
+            fetchQueueStatus();
+        }
+
+        function forceSync() {
+            alert("백엔드와 강제 동기화를 시도합니다.");
+            fetchQueueStatus();
+        }
+
+        function cancelQueue() {
+            alert("대기열에서 이탈했습니다.");
+            document.getElementById('queue-position').innerText = "대기열 없음";
+            document.getElementById('progress-bar').style.width = "0%";
+            document.getElementById('progress-text').innerText = "취소됨";
+        }
+
+        // 3초마다 플라스크 서버와 동기화하여 실시간 대기열/게이지 반영
+        setInterval(fetchQueueStatus, 3000);
+        
+        // 페이지 로드 시 즉시 1회 실행
+        window.onload = fetchQueueStatus;
+    </script>
+
+</body>
+</html>
