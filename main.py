@@ -70,7 +70,7 @@ def admin_login():
             return redirect('/dashboard')
         else:
             return "로그인 실패", 401
-    return render_template('login.html')
+    return render_template('index.html')
 
 @app.route('/dashboard')
 def dashboard():
