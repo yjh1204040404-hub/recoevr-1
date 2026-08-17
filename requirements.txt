@@ -1,5 +1,5 @@
-requirements.txtdiscord.py==2.3.2
-Flask==3.0.0
-pymongo==4.6.1
-python-dotenv==1.0.0
-requests==2.31.0
+discord.py
+Flask
+pymongo
+requests
+python-dotenv
