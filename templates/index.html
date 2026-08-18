@@ -58,7 +58,7 @@
         </div>
 
         {% else %}
-        <!-- 대시보드 (관리자 & 일반유저 공통 모니터링 영역) -->
+        <!-- 대시보드 -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             <!-- 왼쪽: 현재 진행 상태 & 대기열 -->
@@ -102,17 +102,13 @@
                 </div>
             </div>
 
-            <!-- 오른쪽: 관리자 패널 (is_admin 일때만 렌더링) -->
+            <!-- 오른쪽: 관리자 패널 (서버 ID 입력칸 제거됨) -->
             {% if is_admin %}
             <div class="lg:col-span-1">
                 <div class="bg-gray-800 p-6 border border-green-700 rounded-lg shadow-xl shadow-green-900/20">
                     <h3 class="text-lg font-semibold text-green-400 mb-4 border-b border-gray-700 pb-2">🔑 복구키 발급 (관리자)</h3>
                     
                     <div class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">대상 서버 ID</label>
-                            <input type="text" id="gen-server" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:border-green-500" placeholder="123456789012345678">
-                        </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1">복구 인원 (명)</label>
                             <input type="number" id="gen-count" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:border-green-500" placeholder="100">
@@ -135,7 +131,6 @@
 
         <!-- 실시간 데이터 업데이트 JS -->
         <script>
-            // 대기열 및 진행상태 가져오기
             async function fetchQueueStatus() {
                 try {
                     const response = await fetch('/api/queue');
@@ -144,7 +139,6 @@
                     const current = data.current;
                     const qList = data.waiting_queue;
                     
-                    // 진행바 업데이트
                     if (current.active) {
                         const total = current.target;
                         const done = current.success + current.fail;
@@ -166,14 +160,13 @@
                         document.getElementById('stat-fail').innerText = "0";
                     }
 
-                    // 대기열 리스트 업데이트
                     document.getElementById('queue-count').innerText = data.queue_count;
                     const qContainer = document.getElementById('queue-list');
                     if (qList.length > 0) {
                         qContainer.innerHTML = qList.map((q, idx) => `
                             <li class="p-3 bg-gray-700 rounded-md flex justify-between items-center">
                                 <span class="text-xs bg-gray-600 px-2 py-1 rounded text-white mr-3">#${idx + 1}</span>
-                                <span class="flex-1 truncate">서버 ID: ${q.server_id}</span>
+                                <span class="text-xs truncate">서버 ID: ${q.server_id}</span>
                                 <span class="text-gray-400 text-xs">요청: ${q.user}</span>
                             </li>
                         `).join('');
@@ -185,18 +178,15 @@
                 }
             }
 
-            // 1.5초마다 데이터 동기화
             setInterval(fetchQueueStatus, 1500);
-            fetchQueueStatus(); // 초기 로드
+            fetchQueueStatus();
 
             {% if is_admin %}
-            // 관리자 복구키 생성 API 호출
             async function generateKey() {
-                const serverId = document.getElementById('gen-server').value;
                 const count = document.getElementById('gen-count').value;
                 
-                if(!serverId || !count) {
-                    alert("서버 ID와 인원수를 모두 입력해주세요.");
+                if(!count) {
+                    alert("복구 인원수를 입력해주세요.");
                     return;
                 }
 
@@ -204,14 +194,13 @@
                     const response = await fetch('/generate_key', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ server_id: serverId, count: count })
+                        body: JSON.stringify({ count: count })
                     });
                     const result = await response.json();
                     
                     if(result.success) {
                         document.getElementById('key-result').classList.remove('hidden');
                         document.getElementById('generated-key-text').innerText = result.key;
-                        document.getElementById('gen-server').value = '';
                         document.getElementById('gen-count').value = '';
                     } else {
                         alert("키 생성 실패: " + result.error);
