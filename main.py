@@ -63,7 +63,6 @@ def refresh_access_token(refresh_token):
 # ==========================================
 @app.route('/')
 def index():
-    # 일반 유저 모니터링 뷰 (로그인 폼 X, 관리자 X)
     if session.get('logged_in'):
         return redirect(url_for('admin_portal'))
     return render_template('index.html', is_admin=False, show_login=False)
@@ -75,18 +74,15 @@ def admin_portal():
         user_id = request.form.get('userid')
         user_pw = request.form.get('userpw')
         
-        # 관리자 정보 확인
         if user_id == "lakdks12@" and user_pw == "lakdks12@":
             session['logged_in'] = True
             return redirect(url_for('admin_portal'))
         else:
             error_msg = "아이디 또는 비밀번호가 일치하지 않습니다."
 
-    # 이미 로그인된 상태라면 관리자 패널 표시
     if session.get('logged_in'):
         return render_template('index.html', is_admin=True, show_login=False)
     
-    # 로그인 안 된 상태면 로그인 폼 표시
     return render_template('index.html', is_admin=False, show_login=True, error_msg=error_msg)
 
 @app.route('/logout')
@@ -97,8 +93,7 @@ def logout():
 @app.route('/api/queue', methods=['GET'])
 def get_queue_status():
     global current_status, queue_list
-    # 대기열 목록 정리
-    waiting = [{"server_id": q["data"]["server_id"], "user": q["user"].name} for q in queue_list]
+    waiting = [{"server_id": q["data"].get("server_id", "직접 입력"), "user": q["user"].name} for q in queue_list]
     return jsonify({
         "current": current_status,
         "waiting_queue": waiting,
@@ -111,20 +106,18 @@ def generate_key():
         return jsonify({"error": "Unauthorized"}), 401
     
     data = request.json
-    server_id = data.get('server_id')
     count = data.get('count', 0)
     
-    if not server_id or not count:
-        return jsonify({"error": "서버 ID와 인원수를 정확히 입력해주세요."}), 400
+    if not count:
+        return jsonify({"error": "복구 인원수를 정확히 입력해주세요."}), 400
 
-    # RCV-XXXX-XXXX 포맷 키 생성
+    # RCV-XXXX-XXXX 포맷 키 생성 (서버 ID는 키 발급 시점에 고정하지 않음)
     raw_uuid = str(uuid.uuid4()).upper().split('-')
     new_key = f"RCV-{raw_uuid[0][:4]}-{raw_uuid[1][:4]}"
     
-    # MongoDB에 저장
+    # MongoDB에 저장 (target_count만 저장)
     keys_collection.insert_one({
         "key": new_key, 
-        "server_id": str(server_id), 
         "target_count": int(count), 
         "used": False
     })
@@ -134,24 +127,33 @@ def generate_key():
 # ==========================================
 # 4. Discord Bot UI & Logic
 # ==========================================
-class KeyInputModal(discord.ui.Modal, title='사용할 복구키 입력'):
+class KeyInputModal(discord.ui.Modal, title='복구 정보 입력'):
     recovery_key = discord.ui.TextInput(
         label='복구키를 입력해주세요.', style=discord.TextStyle.short,
         placeholder='RCV-XXXX-XXXX', required=True
     )
+    target_server_id = discord.ui.TextInput(
+        label='복구할 대상 서버 ID를 입력하세요.', style=discord.TextStyle.short,
+        placeholder='123456789012345678', required=True
+    )
 
     async def on_submit(self, interaction: discord.Interaction):
         key_val = self.recovery_key.value
+        server_id_val = self.target_server_id.value.strip()
+        
         key_data = keys_collection.find_one({"key": key_val, "used": False})
         
         if not key_data:
             await interaction.response.send_message("❌ 유효하지 않거나 이미 사용된 키입니다.", ephemeral=True)
             return
             
-        keys_collection.update_one({"key": key_val}, {"$set": {"used": True}})
+        # 키 데이터에 유저가 입력한 서버 ID 탑재
+        key_data["server_id"] = server_id_val
+        keys_collection.update_one({"key": key_val}, {"$set": {"used": True, "server_id": server_id_val}})
+        
         view = ConfirmRecoveryView(key_data)
         await interaction.response.send_message(
-            f"✅ **키 인증 성공!**\n대상 서버: `{key_data.get('server_id')}`\n목표 인원: `{key_data.get('target_count')}명`\n\n복구를 진행하시겠습니까?", 
+            f"✅ **키 인증 성공!**\n대상 서버: `{server_id_val}`\n목표 인원: `{key_data.get('target_count')}명`\n\n복구를 진행하시겠습니까?", 
             view=view, ephemeral=True
         )
 
@@ -205,7 +207,7 @@ class MainPanelView(discord.ui.View):
             if len(queue_list) > 0:
                 desc += "**[⏳ 대기열]**\n"
                 for idx, q in enumerate(queue_list):
-                    desc += f"`{idx + 1}번` - 서버: {q['data']['server_id']} (요청: {q['user'].name})\n"
+                    desc += f"`{idx + 1}번` - 서버: {q['data'].get('server_id', '미정')} (요청: {q['user'].name})\n"
             
             embed.description = desc
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -271,12 +273,10 @@ async def process_queue():
                     
                     await asyncio.sleep(1.5)
             else:
-                # DB에 유저가 없을 경우 딜레이만 주며 실패 처리 (시뮬레이션)
                 for i in range(data['target_count']):
                     current_status["fail"] += 1
                     await asyncio.sleep(1.5)
             
-            # 완료 처리
             current_status["active"] = False
             current_status["finished"] = True
             
@@ -296,7 +296,7 @@ def run_flask():
 
 @bot.event
 async def on_ready():
-    bot.add_view(MainPanelView()) # 봇 재시작시 버튼 유지
+    bot.add_view(MainPanelView())
     await bot.tree.sync()
     bot.loop.create_task(process_queue())
     print(f"✅ Logged in as {bot.user} (Recovery Bot Ready)")
